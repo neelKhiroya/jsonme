@@ -22,13 +22,67 @@ func checkErr(err error, errorMessage string) {
 	}
 }
 
-func parseJSON(delim json.Delim) {
+func printJSON(obj map[string]interface{}, filterKeys []string) {
+	if len(filterKeys) == 0 {
+		// Print the entire JSON object
+		jsonData, err := json.MarshalIndent(obj, "", "  ")
+		if err != nil {
+			fmt.Printf("Error marshalling JSON: %v\n", err)
+			return
+		}
+		fmt.Println(string(jsonData))
+	} else {
+		// Print only the filtered keys
+		for _, key := range filterKeys {
+			if value, exists := obj[key]; exists {
+				fmt.Printf("%s: %v\n", key, value)
+			} else {
+				fmt.Printf("Key '%s' not found in JSON object\n", key)
+			}
+		}
+	}
+}
+
+func readJSON(decoder *json.Decoder) error {
+
+	delim, err := checkJSON(decoder)
+	if err != nil {
+		return err
+	}
+
 	switch delim {
 	case '{':
-		//single json
+		err = parseJSON(decoder)
+		checkErr(err, "parsing JSON object")
+
 	case '[':
-		//
+		err = parseArray(decoder)
+		checkErr(err, "parsing JSON array")
 	}
+
+	return nil
+}
+
+func parseJSON(decoder *json.Decoder) error {
+	var obj map[string]interface{}
+	if err := decoder.Decode(&obj); err != nil {
+		return err
+	}
+	printJSON(obj, filterkeys)
+
+	return nil
+}
+
+func parseArray(decoder *json.Decoder) error {
+	for decoder.More() {
+		var obj map[string]interface{}
+		if err := decoder.Decode(&obj); err != nil {
+			return err
+		}
+		printJSON(obj, filterkeys)
+	}
+
+	return nil
 }
 
 func checkJSON(decoder *json.Decoder) (json.Delim, error) {
@@ -68,17 +122,14 @@ var readCmd = &cobra.Command{
 
 		// check file path
 		file, err := os.Open(filepath)
-		if err != nil {
-			fmt.Printf("Error opening JSON: %v\n", err)
-		}
+		checkErr(err, "opening file")
 		defer file.Close()
+		// check if file is empty
 
 		decoder := json.NewDecoder(file)
 
-		// check for json
-		delim, err := checkJSON(decoder)
-		checkErr(err, "reading from json")
-		parseJSON(delim)
+		err = readJSON(decoder)
+		checkErr(err, "parsing JSON")
 	},
 }
 
@@ -90,6 +141,7 @@ func init() {
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
 	readCmd.Flags().StringVarP(&filepath, "file", "f", "", "Path to JSON file")
+	readCmd.Flags().StringSliceVarP(&filterkeys, "keys", "k", []string{}, "Keys to filter from JSON")
 
 	readCmd.MarkFlagRequired("file")
 }
