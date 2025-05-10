@@ -23,7 +23,12 @@ func checkErr(err error, errorMessage string) {
 }
 
 func parseJSON(delim json.Delim) {
-
+	switch delim {
+	case '{':
+		//single json
+	case '[':
+		//
+	}
 }
 
 func checkJSON(decoder *json.Decoder) (json.Delim, error) {
