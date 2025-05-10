@@ -52,10 +52,12 @@ func readJSON(decoder *json.Decoder) error {
 
 	switch delim {
 	case '{':
+		// single json
 		err = parseJSON(decoder)
 		checkErr(err, "parsing JSON object")
 
 	case '[':
+		// json array
 		err = parseArray(decoder)
 		checkErr(err, "parsing JSON array")
 	}
@@ -87,6 +89,7 @@ func parseArray(decoder *json.Decoder) error {
 
 func checkJSON(decoder *json.Decoder) (json.Delim, error) {
 
+	// check if the first token is a JSON object or array
 	token, err := decoder.Token()
 	if err != nil {
 		return 0, err
