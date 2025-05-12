@@ -14,6 +14,12 @@ import (
 
 var filepath string
 var filterkeys []string
+var outputType string
+
+type keyCount struct {
+	Count int    `json:"count"`
+	Key   string `json:"key"`
+}
 
 func checkErr(err error, errorMessage string) {
 	if err != nil {
@@ -23,24 +29,31 @@ func checkErr(err error, errorMessage string) {
 }
 
 func printJSON(obj map[string]interface{}, filterKeys []string) {
+	var dataToPrint map[string]interface{}
+
 	if len(filterKeys) == 0 {
-		// Print the entire JSON object
-		jsonData, err := json.MarshalIndent(obj, "", "  ")
-		if err != nil {
-			fmt.Printf("Error marshalling JSON: %v\n", err)
-			return
-		}
-		fmt.Println(string(jsonData))
+		dataToPrint = obj
 	} else {
-		// Print only the filtered keys
+		dataToPrint = make(map[string]interface{})
 		for _, key := range filterKeys {
 			if value, exists := obj[key]; exists {
-				fmt.Printf("%s: %v\n", key, value)
-			} else {
-				fmt.Printf("Key '%s' not found in JSON object\n", key)
+				dataToPrint[key] = value
 			}
 		}
+
+		// skip if none of the keys matched
+		if len(dataToPrint) == 0 {
+			return
+		}
 	}
+
+	jsonData, err := json.MarshalIndent(dataToPrint, "", "  ")
+	if err != nil {
+		fmt.Printf("Error marshalling JSON: %v\n", err)
+		return
+	}
+
+	fmt.Println(string(jsonData))
 }
 
 func readJSON(decoder *json.Decoder) error {
@@ -75,13 +88,72 @@ func parseJSON(decoder *json.Decoder) error {
 	return nil
 }
 
-func parseArray(decoder *json.Decoder) error {
-	for decoder.More() {
-		var obj map[string]interface{}
-		if err := decoder.Decode(&obj); err != nil {
-			return err
+func countJSON(obj map[string]interface{}, filterKeys []string) []keyCount {
+	var countToReturn []keyCount
+
+	if len(filterKeys) != 0 {
+		for _, key := range filterKeys {
+			if _, exists := obj[key]; exists {
+				tempCount := &keyCount{
+					Key:   key,
+					Count: 0,
+				}
+				tempCount.Count += 1
+				countToReturn = append(countToReturn, *tempCount)
+			}
 		}
-		printJSON(obj, filterkeys)
+	}
+
+	return countToReturn
+}
+
+func mergeArrays(returnArray []keyCount, mergeArray []keyCount) []keyCount {
+	for _, keycount := range mergeArray {
+		found := false
+		for i, r := range returnArray {
+			if r.Key == keycount.Key {
+				returnArray[i].Count += 1
+				found = true
+				break
+			}
+		}
+		if !found {
+			returnArray = append(returnArray, keycount)
+		}
+	}
+	return returnArray
+}
+
+func printCount(countsToPrint []keyCount) {
+	// parse array as json
+	data, err := json.MarshalIndent(countsToPrint, "", "  ")
+	checkErr(err, "error reading count json")
+	fmt.Println(string(data))
+}
+
+func parseArray(decoder *json.Decoder) error {
+	if outputType == "c" {
+		// count the keys passed
+		var keycount []keyCount
+
+		// iterate objs
+		for decoder.More() {
+			var obj map[string]interface{}
+			if err := decoder.Decode(&obj); err != nil {
+				return err
+			}
+			tempCount := countJSON(obj, filterkeys)
+			keycount = mergeArrays(keycount, tempCount)
+		}
+		printCount(keycount)
+	} else {
+		for decoder.More() {
+			var obj map[string]interface{}
+			if err := decoder.Decode(&obj); err != nil {
+				return err
+			}
+			printJSON(obj, filterkeys)
+		}
 	}
 
 	return nil
@@ -107,10 +179,13 @@ func checkJSON(decoder *json.Decoder) (json.Delim, error) {
 	return delim, nil
 }
 
-// func findKey(keys []string, decoder json.Decoder) {
-// 	encoder := json.NewEncoder(os.Stdout)
+func checkValidOutputType(outputType string) error {
+	if outputType == "k" || outputType == "c" {
+		return nil
+	}
 
-// }
+	return fmt.Errorf("invalid output type %s", outputType)
+}
 
 // readCmd represents the read command
 var readCmd = &cobra.Command{
@@ -129,6 +204,10 @@ var readCmd = &cobra.Command{
 		defer file.Close()
 		// check if file is empty
 
+		// check if output type is valid
+		err = checkValidOutputType(outputType)
+		checkErr(err, "with output type")
+
 		decoder := json.NewDecoder(file)
 
 		err = readJSON(decoder)
@@ -145,6 +224,7 @@ func init() {
 	// and all subcommands, e.g.:
 	readCmd.Flags().StringVarP(&filepath, "file", "f", "", "Path to JSON file")
 	readCmd.Flags().StringSliceVarP(&filterkeys, "keys", "k", []string{}, "Keys to filter from JSON")
+	readCmd.Flags().StringVarP(&outputType, "output", "o", "k", "Type of output - \nc (count)\nj (json: default)\n")
 
 	readCmd.MarkFlagRequired("file")
 }
