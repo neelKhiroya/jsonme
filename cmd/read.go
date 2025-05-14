@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/neelkhiroya/jsonme/cmd/util"
+	"github.com/neelkhiroya/jsonme/util"
 	"github.com/spf13/cobra"
 )
 
