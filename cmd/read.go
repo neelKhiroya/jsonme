@@ -5,10 +5,10 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 
+	"github.com/neelkhiroya/jsonme/cmd/util"
 	"github.com/spf13/cobra"
 )
 
@@ -19,13 +19,6 @@ var outputType string
 type keyCount struct {
 	Count int    `json:"count"`
 	Key   string `json:"key"`
-}
-
-func checkErr(err error, errorMessage string) {
-	if err != nil {
-		fmt.Printf("Error %s: %v\n", errorMessage, err)
-		os.Exit(1)
-	}
 }
 
 func printJSON(obj map[string]interface{}, filterKeys []string) {
@@ -58,7 +51,7 @@ func printJSON(obj map[string]interface{}, filterKeys []string) {
 
 func readJSON(decoder *json.Decoder) error {
 
-	delim, err := checkJSON(decoder)
+	delim, err := util.CheckJSON(decoder)
 	if err != nil {
 		return err
 	}
@@ -67,12 +60,12 @@ func readJSON(decoder *json.Decoder) error {
 	case '{':
 		// single json
 		err = parseJSON(decoder)
-		checkErr(err, "parsing JSON object")
+		util.CheckErr(err, "parsing JSON object")
 
 	case '[':
 		// json array
 		err = parseArray(decoder)
-		checkErr(err, "parsing JSON array")
+		util.CheckErr(err, "parsing JSON array")
 	}
 
 	return nil
@@ -127,7 +120,7 @@ func mergeArrays(returnArray []keyCount, mergeArray []keyCount) []keyCount {
 func printCount(countsToPrint []keyCount) {
 	// parse array as json
 	data, err := json.MarshalIndent(countsToPrint, "", "  ")
-	checkErr(err, "error reading count json")
+	util.CheckErr(err, "error reading count json")
 	fmt.Println(string(data))
 }
 
@@ -159,26 +152,6 @@ func parseArray(decoder *json.Decoder) error {
 	return nil
 }
 
-func checkJSON(decoder *json.Decoder) (json.Delim, error) {
-
-	// check if the first token is a JSON object or array
-	token, err := decoder.Token()
-	if err != nil {
-		return 0, err
-	}
-
-	delim, ok := token.(json.Delim)
-	if !ok {
-		return 0, errors.New("top-level JSON is not an object or array")
-	}
-
-	if delim != '{' && delim != '[' {
-		return 0, fmt.Errorf("unsupported JSON delimiter: %v", delim)
-	}
-
-	return delim, nil
-}
-
 func checkValidOutputType(outputType string) error {
 	if outputType == "k" || outputType == "c" {
 		return nil
@@ -200,18 +173,18 @@ var readCmd = &cobra.Command{
 
 		// check file path
 		file, err := os.Open(filepath)
-		checkErr(err, "opening file")
+		util.CheckErr(err, "opening file")
 		defer file.Close()
 		// check if file is empty
 
 		// check if output type is valid
 		err = checkValidOutputType(outputType)
-		checkErr(err, "with output type")
+		util.CheckErr(err, "with output type")
 
 		decoder := json.NewDecoder(file)
 
 		err = readJSON(decoder)
-		checkErr(err, "parsing JSON")
+		util.CheckErr(err, "parsing JSON")
 	},
 }
 
@@ -224,7 +197,7 @@ func init() {
 	// and all subcommands, e.g.:
 	readCmd.Flags().StringVarP(&filepath, "file", "f", "", "Path to JSON file")
 	readCmd.Flags().StringSliceVarP(&filterkeys, "keys", "k", []string{}, "Keys to filter from JSON")
-	readCmd.Flags().StringVarP(&outputType, "output", "o", "k", "Type of output - \nc (count)\nj (json: default)\n")
+	readCmd.Flags().StringVarP(&outputType, "output", "o", "k", "Type of output - \nc (count)\nk (key: default)\n")
 
 	readCmd.MarkFlagRequired("file")
 }
